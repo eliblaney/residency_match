@@ -43,7 +43,7 @@ pub enum MatchStatus {
     UNMATCHED, MATCHED, PENDING
 }
 */
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Applicant {
     pub id: u32,
     // pub name: String,
@@ -137,7 +137,7 @@ impl Rankable<Program> for Applicant {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Program {
     pub id: u32,
     // pub name: String,

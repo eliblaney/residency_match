@@ -82,6 +82,42 @@ fn run_simulation(parameters: MatchParameters) {
              matched_couples, matched_couples as f32 / (matched_couples + unmatched_couples) as f32 * 100.0,
              unmatched_couples, unmatched_couples as f32 / (matched_couples + unmatched_couples) as f32 * 100.0,
     );
+
+    let first_choicers = matcher.matches.iter()
+        .filter(|m| m.1.iter().any(|a| a.ranking[0] == m.0.id()))
+        .flat_map(|m| &m.1)
+        .collect::<Vec<_>>();
+    let all_first_choice = first_choicers.len();
+
+    println!("Number of applicants that matched their first choice: {} ({:.1}%)",
+             all_first_choice, all_first_choice as f32 / matched_applicants as f32 * 100.0
+    );
+
+    let couples_first_choice = first_choicers.iter()
+        .filter(|a| a.get_couple().is_some())
+        .collect::<Vec<_>>()
+        .len();
+
+    println!("Number of couples that matched their first choice: {} ({:.1}%)",
+             couples_first_choice, couples_first_choice as f32 / matched_couples as f32 * 100.0
+    );
+
+    println!();
+
+    let sample_match = matcher.matches.iter().find(|m| m.1.len() > 0).unwrap();
+    let sample_program = sample_match.0;
+    let sample_applicant = sample_match.1[0];
+
+    println!("Sample applicant ({}) with competitiveness={} ranked {} programs and matched their #{} choice.",
+             sample_applicant.id(), sample_applicant.competitiveness, sample_applicant.applications,
+             sample_applicant.ranking.iter().position(|&p| p == sample_program.id()).unwrap() + 1);
+    println!("Sample program ({}) with capacity {} and competitiveness={} ranked {} applicants and matched with {} applicants.",
+             sample_program.id(), sample_program.capacity, sample_program.competitiveness,
+             sample_program.ranking.len(), sample_match.1.len());
+    println!("Sample program's matriculates and their position in program's rank list:");
+    sample_match.1.iter().for_each(|a| {
+        println!("{} (#{})", a.id(), sample_program.ranking.iter().position(|&i| i == a.id()).unwrap() + 1);
+    });
 }
 
 fn generate_match_parameters(num_applicants: usize, num_programs: usize) -> MatchParameters {

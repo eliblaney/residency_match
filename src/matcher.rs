@@ -63,6 +63,7 @@ where
             if program.0.capacity() > program.1.len() as u8 {
                 // if program has an opening, tentatively match applicant to program
                 program.1.push(&applicant);
+                assert!(program.1.len() as u8 <= program.0.capacity());
                 return Ok(());
             }
             let rank_map: Vec<(usize, usize)> = program.1.iter().enumerate().map(|a| (
@@ -78,8 +79,9 @@ where
             if rank_position.unwrap() < *weakest_rank {
                 // if program prefers applicant to someone already matched,
                 // then applicant takes their spot & we re-attempt the displaced applicant
-                let weakest_applicant: &A = program.1.remove(*weakest_index);
+                let weakest_applicant: &A = program.1.swap_remove(*weakest_index);
                 program.1.push(&applicant);
+                assert!(program.1.len() as u8 <= program.0.capacity());
                 return self.retry_match(weakest_applicant);
             }
         }
@@ -100,7 +102,7 @@ where
                 .find(|m| m.0.id() == *program_pair.0)
                 .ok_or(MatchError::ProgramNotFound(format!("couples: p0: *program_pair.0 {} in matches.iter()", *program_pair.0).into()))?;
             let mut p1 = p0;
-            let same_program = *program_pair.0 != *program_pair.1;
+            let same_program = *program_pair.0 == *program_pair.1;
             if !same_program {
                 p1 = self.matches.iter()
                     .find(|m| m.0.id() == *program_pair.1)
@@ -137,24 +139,29 @@ where
             let mut r0_worst_iter = r0_map.iter();
 
             if same_program {
-                let available_spots = p0.0.capacity() - p0.1.len() as u8;
+                let available_spots = max(p0.0.capacity() - p0.1.len() as u8, 0);
                 match available_spots {
                     0 => {
                         // if program has space for no applicants, replace the two weakest
                         // tentatively matched applicants to make room for both
                         let (weak_index0, weak_rank) = r0_worst_iter.next().unwrap();
                         if rank0 < *weak_rank && rank1 < *weak_rank {
-                            let (weak_index1, weak_rank) = r0_worst_iter.next().unwrap();
+                            let (mut weak_index1, weak_rank) = r0_worst_iter.next().unwrap();
                             if rank0 < *weak_rank && rank1 < *weak_rank {
                                 // both applicants are preferred to both currently weakest matched applicants
                                 // we re-attempt both displaced applicants
                                 let p0 = self.matches.iter_mut()
                                     .find(|m| m.0.id() == *program_pair.0)
                                     .ok_or(MatchError::ProgramNotFound(format!("couples: &mut p0 (1): *program_pair.0 {} in matches.iter()", *program_pair.0).into()))?;
-                                let weakest_applicant0: &A = p0.1.remove(*weak_index0);
-                                let weakest_applicant1: &A = p0.1.remove(*weak_index1);
+                                let weakest_applicant0: &A = p0.1.swap_remove(*weak_index0);
+                                if *weak_index0 < weak_index1 {
+                                    // adjust index for second removal
+                                    weak_index1 = weak_index1 - 1;
+                                }
+                                let weakest_applicant1: &A = p0.1.swap_remove(weak_index1);
                                 p0.1.push(applicant);
                                 p0.1.push(couple);
+                                assert!(p0.1.len() as u8 <= p0.0.capacity());
                                 self.retry_match(weakest_applicant0)?;
                                 self.retry_match(weakest_applicant1)?;
                                 return Ok(());
@@ -171,24 +178,31 @@ where
                             let p0 = self.matches.iter_mut()
                                 .find(|m| m.0.id() == *program_pair.0)
                                 .ok_or(MatchError::ProgramNotFound(format!("couples: &mut p0 (2): *program_pair.0 {} in matches.iter()", *program_pair.0).into()))?;
-                            let weakest_applicant: &A = p0.1.remove(*weak_index);
+                            let weakest_applicant: &A = p0.1.swap_remove(*weak_index);
                             p0.1.push(applicant);
                             p0.1.push(couple);
+                            assert!(p0.1.len() as u8 <= p0.0.capacity());
                             self.retry_match(weakest_applicant)?;
                             return Ok(());
                         }
                     },
                     _ => {
+                        assert!(p0.0.capacity() - p0.1.len() as u8 >= 2,
+                                "couples: available_spots {} not >= 2; {} - {}",
+                                available_spots, p0.0.capacity(), p0.1.len()
+                        );
                         // if program has space for both applicants, tentatively match both
                         let p0 = self.matches.iter_mut()
                             .find(|m| m.0.id() == *program_pair.0)
                             .ok_or(MatchError::ProgramNotFound(format!("couples: &mut p0 (3): *program_pair.0 {} in matches.iter()", *program_pair.0).into()))?;
                         p0.1.push(applicant);
                         p0.1.push(couple);
+                        assert!(p0.1.len() as u8 <= p0.0.capacity());
                         return Ok(());
                     },
                 };
             } else {
+                assert_ne!(p0.0.id(), p1.0.id());
                 if p0.0.capacity() > p0.1.len() as u8
                     && p1.0.capacity() > p1.1.len() as u8 {
                     // if programs both have an opening, tentatively match applicant to programs
@@ -197,11 +211,13 @@ where
                             .find(|m| m.0.id() == *program_pair.0)
                             .ok_or(MatchError::ProgramNotFound(format!("couples: &mut p0 (4): *program_pair.0 {} in matches.iter()", *program_pair.0).into()))?;
                         p0.1.push(applicant);
+                        assert!(p0.1.len() as u8 <= p0.0.capacity());
                     }
                     let p1 = self.matches.iter_mut()
                         .find(|m| m.0.id() == *program_pair.1)
                         .ok_or(MatchError::ProgramNotFound(format!("couples: &mut p1 (1): *program_pair.0 {} in matches.iter()", *program_pair.0).into()))?;
                     p1.1.push(couple);
+                    assert!(p1.1.len() as u8 <= p1.0.capacity(), "couples: program {} p1.1.len() {} <= p1.0.capacity() {}", p1.0.id(), p1.1.len(), p1.0.capacity());
                     return Ok(());
                 }
 
@@ -219,7 +235,7 @@ where
                 r1_map.sort_by(|a, b| b.1.cmp(&a.1));
                 // weakest tentative match
                 let (r0_worst_index, r0_worst_rank) = r0_worst_iter.next().unwrap();
-                let (r1_worst_index, r1_worst_rank) = r1_map.iter().next().unwrap();
+                let (mut r1_worst_index, r1_worst_rank) = r1_map.iter().next().unwrap();
 
                 if rank0 < *r0_worst_rank && rank1 < *r1_worst_rank {
                     // if both applicants are preferred to both weakest tentatively matched applicants
@@ -229,14 +245,20 @@ where
                         let p0 = self.matches.iter_mut()
                             .find(|m| m.0.id() == *program_pair.0)
                             .ok_or(MatchError::ProgramNotFound(format!("couples: &mut p0 (5): *program_pair.0 {} in matches.iter()", *program_pair.0)).into())?;
-                        weakest_applicant0 = Some(p0.1.remove(*r0_worst_index));
+                        weakest_applicant0 = Some(p0.1.swap_remove(*r0_worst_index));
                         p0.1.push(applicant);
+                        assert!(p0.1.len() as u8 <= p0.0.capacity());
                     }
                     let p1 = self.matches.iter_mut()
                         .find(|m| m.0.id() == *program_pair.1)
                         .ok_or(MatchError::ProgramNotFound(format!("couples: &mut p1 (2): *program_pair.0 {} in matches.iter()", *program_pair.0)))?;
-                    let weakest_applicant1: &A = p1.1.remove(*r1_worst_index);
+                    if *r0_worst_index < r1_worst_index {
+                        // adjust index for second removal
+                        r1_worst_index = r1_worst_index - 1;
+                    }
+                    let weakest_applicant1: &A = p1.1.swap_remove(r1_worst_index);
                     p1.1.push(couple);
+                    assert!(p1.1.len() as u8 <= p1.0.capacity());
                     self.retry_match(weakest_applicant0.unwrap())?;
                     self.retry_match(weakest_applicant1)?;
                     return Ok(());
@@ -260,25 +282,28 @@ where
                         let index = program.1.iter()
                             .position(|a| a.get_couple() == Some(couple))
                             .ok_or(MatchError::ApplicantNotFound(format!("retry: index: couple {} in program.1.iter()", couple)))?;
-                        let couple = program.1.remove(index);
+                        let couple = program.1.swap_remove(index);
                         self.attempt_couples_match(applicant, Some(couple))
                     },
                     None => {
-                        // TODO: somehow this occasionally fails to find couples
+                        // FIXME: somehow this occasionally fails to find couples
                         // for now, we ignore the stragglers exist
                         let index = self.unmatched_a.iter_mut()
                             .position(|m| m.get_couple() == Some(couple));
                         /*
                             .ok_or(MatchError::ProgramNotFound(format!("retry: program: any(couple) {} in matches.iter()", couple)))?;
-                        let couple = self.unmatched_a.remove(index);
+                        let couple = self.unmatched_a.swap_remove(index);
                         self.attempt_couples_match(applicant, Some(couple))
                          */
                         match index {
                             Some(index) => {
-                                let couple = self.unmatched_a.remove(index);
+                                let couple = self.unmatched_a.swap_remove(index);
                                 self.attempt_couples_match(applicant, Some(couple))
                             },
-                            None => self.attempt_single_match(applicant)
+                            None => {
+                                eprintln!("[WARNING] retry: couple not found: {}", couple);
+                                self.attempt_single_match(applicant)
+                            }
                         }
                     }
                 }
@@ -310,9 +335,14 @@ where
     }
 
     pub fn unfilled_positions(&self) -> u32 {
-        // FIXME: Somehow subtracting program capacity from matched applicants can a negative number... overflow somehow
         self.unmatched_p.iter().map(|p| p.capacity() as u32).sum::<u32>()
-            + self.matches.iter().map(|m| max(0, m.0.capacity() as i32 - m.1.len() as i32) as u32).sum::<u32>()
+            + self.matches.iter().map(|m| {
+            let diff = m.0.capacity() as i32 - m.1.len() as i32;
+            if diff < 0 {
+                eprintln!("[WARNING] unfilled_positions: program {} has overfilled capacity: {}/{} (extra = {})", m.0.id(), m.1.len(), m.0.capacity(), -diff);
+            }
+            max(0, diff) as u32
+        }).sum::<u32>()
     }
 
 }

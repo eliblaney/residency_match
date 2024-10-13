@@ -7,6 +7,10 @@ mod models;
 mod matcher;
 mod parameters;
 
+const NUM_APPLICANTS: usize = 50000;
+const NUM_PROGRAMS: usize = 10000;
+
+
 fn main() {
     let datafile = "data.bin".into();
 
@@ -20,10 +24,7 @@ fn main() {
 fn load_params(datafile: Option<String>) -> MatchParameters {
     match datafile {
         None => {
-            let num_applicants = 50000;
-            let num_programs = 10000;
-
-            generate_match_parameters(num_applicants, num_programs)
+            generate_match_parameters(NUM_APPLICANTS, NUM_PROGRAMS)
         },
         Some(datafile) => {
             let start = Instant::now();

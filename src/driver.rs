@@ -7,6 +7,15 @@ use crossterm::{QueueableCommand, cursor, terminal, ExecutableCommand};
 use std::time::Instant;
 use crate::ranker;
 
+trait AsMinutes {
+    fn as_minutes(&self) -> f32;
+}
+impl AsMinutes for std::time::Duration {
+    fn as_minutes(&self) -> f32 {
+        self.as_secs_f32() / 60.0
+    }
+}
+
 pub fn generate_match_parameters(num_applicants: usize, num_programs: usize) -> MatchParameters {
     generate_match_parameters_(num_applicants, num_programs, false)
 }
@@ -112,7 +121,7 @@ pub fn generate_rankings(applicants: &mut Vec<Couple<Applicant>>, programs: &mut
                          p.process_applications()
     );
 
-    println!("Built rankings in {:.2?}.", start.elapsed());
+    println!("Built rankings in {:.2?}min.", start.elapsed().as_minutes());
 }
 
 pub fn run_simulation(parameters: MatchParameters) {
@@ -131,7 +140,7 @@ pub fn run_simulation(parameters: MatchParameters) {
             eprintln!("Error while matching: {:?}", e.to_string());
             return
         },
-        Ok(_) => println!("Finished match in {:.2?}.", start.elapsed())
+        Ok(_) => println!("Finished match in {:.2?}min.", start.elapsed().as_minutes())
     };
 
     let matched_programs = matcher.matches.len();

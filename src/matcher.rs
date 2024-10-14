@@ -184,17 +184,28 @@ where
                                     Some(c) => {
                                         return if weakest_applicant0.get_couple().eq(&Some(weakest_applicant1.id())) {
                                             // we displaced both partners of the couple
-                                            return self.attempt_couples_match(weakest_applicant0, Some(weakest_applicant1))
+                                            self.attempt_couples_match(weakest_applicant0, Some(weakest_applicant1))
                                         } else if let Some(i) = p0.1.iter().position(|a| a.id() == c) {
                                             // we displaced one partner of the couple (and a rando)
                                             let extra = p0.1.swap_remove(i);
-                                            self.attempt_couples_match(weakest_applicant0, Some(extra))?;
-                                            self.retry_match(weakest_applicant1)
+                                            match weakest_applicant1.get_couple() {
+                                                None => self.retry_match(weakest_applicant1)?,
+                                                Some(j) => {
+                                                    if let Some(k) = p0.1.iter().position(|a| a.id() == j) {
+                                                        // the rando is a couple at the same program
+                                                        let extra2 = p0.1.swap_remove(k);
+                                                        self.attempt_couples_match(weakest_applicant1, Some(extra2))?
+                                                    } else {
+                                                        self.retry_match(weakest_applicant1)?
+                                                    }
+                                                }
+                                            };
+                                            self.attempt_couples_match(weakest_applicant0, Some(extra))
                                         } else {
                                             // neither displaced applicant is coupled at this same program
                                             self.retry_match(weakest_applicant1)?;
                                             self.retry_match(weakest_applicant0)
-                                        };
+                                        }
                                     },
                                     None => {
                                         match weakest_applicant1.get_couple() {
@@ -203,7 +214,18 @@ where
                                                 if let Some(i) = p0.1.iter().position(|a| a.id() == c) {
                                                     // we displaced one partner of the couple (and a rando)
                                                     let extra = p0.1.swap_remove(i);
-                                                    self.retry_match(weakest_applicant0)?;
+                                                    match weakest_applicant0.get_couple() {
+                                                        None => self.retry_match(weakest_applicant0)?,
+                                                        Some(j) => {
+                                                            if let Some(k) = p0.1.iter().position(|a| a.id() == j) {
+                                                                // the rando is a couple at the same program
+                                                                let extra2 = p0.1.swap_remove(k);
+                                                                self.attempt_couples_match(weakest_applicant0, Some(extra2))?
+                                                            } else {
+                                                                self.retry_match(weakest_applicant0)?
+                                                            }
+                                                        }
+                                                    };
                                                     return self.attempt_couples_match(weakest_applicant1, Some(extra));
                                                 } else {
                                                     // neither displaced applicant is coupled at this same program
@@ -360,7 +382,7 @@ where
         }
     }
 
-    pub fn run_match(&mut self, a: &'a mut Vec<Couple<A>>, p: &'a Vec<P>) -> Result<(), MatchError> {
+    pub fn run_match(&mut self, a: &'a Vec<Couple<A>>, p: &'a Vec<P>) -> Result<(), MatchError> {
         self.clear();
         self.matches = p.into_iter().map(|p| (p, Vec::new())).collect();
 
@@ -368,7 +390,7 @@ where
         let mut i= 0usize;
         let mut stdout = stdout();
         stdout.execute(cursor::Hide).unwrap();
-        a.iter_mut().map(|c| {
+        a.iter().map(|c| {
             let r = self.attempt_couples_match(&c.0, c.1.as_ref());
             i += 1;
             stdout.queue(cursor::SavePosition).unwrap();

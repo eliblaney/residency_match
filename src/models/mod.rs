@@ -74,7 +74,7 @@ impl Applicant {
                 // email: generator::random_email(),
                 // phone: generator::random_phone(),
                 // status: MatchStatus::PENDING,
-                applications: (competitiveness * 100.0) as u8 + 1,
+                applications: ((1.0 - competitiveness) * 100.0) as u8 + 1,
                 competitiveness,
                 couple: couple.clone().map(|a| a.id),
                 ranking: Vec::new(),
@@ -127,7 +127,8 @@ pub struct Program {
     // pub deadline: DateTime<Utc>,
     pub capacity: u8,
     pub competitiveness: f32,
-    pub ranking: Vec<(u32, f32)>,
+    pub applications: Vec<(u32, f32)>,
+    pub ranking: Vec<u32>,
 }
 
 impl Program {
@@ -149,6 +150,7 @@ impl Program {
             // deadline: generator::random_deadline(),
             capacity: generator::random_capacity(),
             competitiveness: generator::random_competitiveness(),
+            applications: Vec::new(),
             ranking: Vec::new(),
         }
     }
@@ -166,11 +168,11 @@ impl Rankable<Applicant> for Program {
     }
 
     fn ranking(&self) -> Vec<u32> {
-        self.ranking.iter().map(|(a, _)| *a).collect()
+        self.ranking.clone()
     }
 
     fn add_ranking(&mut self, to_add: &Applicant) {
-        self.ranking.push((to_add.id, to_add.competitiveness))
+        self.ranking.push(to_add.id);
     }
 }
 
@@ -182,8 +184,15 @@ impl HasCapacity for Program {
 
 impl ReceiveApplication<Applicant> for Program {
     fn receive_application(&mut self, applicant: &Applicant) {
-        self.add_ranking(&applicant);
-        self.ranking.sort_by(|(_, comp_a), (_, comp_b)| comp_b.total_cmp(comp_a));
+        self.applications.push((applicant.id, applicant.competitiveness));
+        self.applications.sort_by(|(_, comp_a), (_, comp_b)| comp_b.total_cmp(comp_a));
+    }
+    
+    fn process_applications(&mut self) {
+        self.applications.sort_by(|(_, comp_a), (_, comp_b)| comp_b.total_cmp(comp_a));
+        for (a, _) in self.applications.iter().take((15 * self.capacity) as usize) {
+            self.ranking.push(*a);
+        }
     }
 }
 

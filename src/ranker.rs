@@ -8,6 +8,7 @@ pub trait ReceiveApplication<A>
 where A: Competitive
 {
     fn receive_application(&mut self, applicant: &A);
+    fn process_applications(&mut self);
 }
 
 pub struct RankStrategy {
@@ -43,30 +44,31 @@ where Self: Competitive
     }
 }
 
-pub fn rank<A, P>(applicant: &mut Couple<A>, programs: &mut Vec<P>, strategy: &RankStrategy, distribution: &RankDistribution)
+pub fn rank<A, P>(applicant: &mut Couple<A>, programs: &mut Vec<P>,
+                  strategy: &RankStrategy, distribution: &RankDistribution)
 where A: Rankable<P> + HasApplications + Competitive,
       P: Rankable<A> + ReceiveApplication<A> + Competitive
 {
     let a = &mut applicant.0;
     let reach: Vec<u32> = programs.iter()
         .filter(|p|
-            p.competitiveness() >= f32::min(0.99, strategy.reach_multiplier * a.competitiveness())
+                p.competitiveness() < strategy.reach_multiplier * a.competitiveness() &&
+                    p.competitiveness() >= f32::min(0.99, strategy.realistic_multiplier * a.competitiveness())
         )
         .take((a.applications() as f32 * distribution.reach) as usize)
         .map(|p| p.id())
         .collect();
     let realistic: Vec<u32> = programs.iter()
         .filter(|p|
-            p.competitiveness() < strategy.reach_multiplier * a.competitiveness() &&
-                p.competitiveness() >= f32::min(0.99, strategy.realistic_multiplier * a.competitiveness())
+                p.competitiveness() < strategy.realistic_multiplier * a.competitiveness() &&
+                    p.competitiveness() >= f32::min(0.95, strategy.safety_multiplier * a.competitiveness())
         )
         .take((a.applications() as f32 * distribution.realistic) as usize)
         .map(|p| p.id())
         .collect();
     let safety: Vec<u32> = programs.iter()
         .filter(|p|
-            p.competitiveness() < strategy.realistic_multiplier * a.competitiveness() &&
-                p.competitiveness() >= f32::min(0.95, strategy.safety_multiplier * a.competitiveness())
+            p.competitiveness() < strategy.safety_multiplier * a.competitiveness()
         )
         .take((a.applications() as f32 * distribution.safety) as usize)
         .map(|p| p.id())

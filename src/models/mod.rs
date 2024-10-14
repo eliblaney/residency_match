@@ -2,36 +2,17 @@ mod generator;
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use serde::{Deserialize, Serialize};
+use crate::ranker::{Competitive, Rankable, ReceiveApplication};
 
 static APPLICANT_COUNTER: AtomicU32 = AtomicU32::new(0);
 static PROGRAM_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-pub trait Competitive {
-    fn competitiveness(&self) -> f32;
-}
-
-pub trait Rankable<T: Competitive> where Self: Competitive {
-    fn id(&self) -> u32;
-    fn ranking(&self) -> &Vec<u32>;
-    fn ranking_mut(&mut self) -> &mut Vec<u32>;
-    fn add_ranking(&mut self, to_add: &T);
-    fn sample_ranking(&mut self, to_rank: &mut Vec<&T>, num: u8) {
-        self.ranking_mut().clear();
-        to_rank.sort_by(|a, b| {
-            (a.competitiveness() - self.competitiveness())
-                .abs()
-                .partial_cmp(&(b.competitiveness() - self.competitiveness()).abs())
-                .unwrap()
-        });
-
-        for program in to_rank.iter().take(num.into()) {
-            self.add_ranking(program);
-        }
-    }
-}
-
 pub trait HasCouple {
     fn get_couple(&self) -> Option<u32>;
+}
+
+pub trait HasApplications {
+    fn applications(&self) -> u8;
 }
 
 pub trait HasCapacity {
@@ -124,16 +105,18 @@ impl Rankable<Program> for Applicant {
         self.id
     }
 
-    fn ranking(&self) -> &Vec<u32> {
-        &self.ranking
-    }
-
-    fn ranking_mut(&mut self) -> &mut Vec<u32> {
-        self.ranking.as_mut()
+    fn ranking(&self) -> Vec<u32> {
+        self.ranking.clone()
     }
 
     fn add_ranking(&mut self, to_add: &Program) {
         self.ranking.push(to_add.id)
+    }
+}
+
+impl HasApplications for Applicant {
+    fn applications(&self) -> u8 {
+        self.applications
     }
 }
 
@@ -144,7 +127,7 @@ pub struct Program {
     // pub deadline: DateTime<Utc>,
     pub capacity: u8,
     pub competitiveness: f32,
-    pub ranking: Vec<u32>,
+    pub ranking: Vec<(u32, f32)>,
 }
 
 impl Program {
@@ -182,22 +165,25 @@ impl Rankable<Applicant> for Program {
         self.id
     }
 
-    fn ranking(&self) -> &Vec<u32> {
-        &self.ranking
-    }
-
-    fn ranking_mut(&mut self) -> &mut Vec<u32> {
-        self.ranking.as_mut()
+    fn ranking(&self) -> Vec<u32> {
+        self.ranking.iter().map(|(a, _)| *a).collect()
     }
 
     fn add_ranking(&mut self, to_add: &Applicant) {
-        self.ranking.push(to_add.id)
+        self.ranking.push((to_add.id, to_add.competitiveness))
     }
 }
 
 impl HasCapacity for Program {
     fn capacity(&self) -> u8 {
         self.capacity
+    }
+}
+
+impl ReceiveApplication<Applicant> for Program {
+    fn receive_application(&mut self, applicant: &Applicant) {
+        self.add_ranking(&applicant);
+        self.ranking.sort_by(|(_, comp_a), (_, comp_b)| comp_b.total_cmp(comp_a));
     }
 }
 
